@@ -1,0 +1,49 @@
+name: Test Cloud IP Access
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 安裝測試套件
+        run: pip install requests beautifulsoup4
+
+      - name: 測試 acgsecrets.hk 與 AniList 連線
+        run: |
+          python - << 'EOF'
+          import requests
+          from bs4 import BeautifulSoup
+
+          headers = {
+              "User-Agent": (
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) "
+                  "Chrome/130.0.0.0 Safari/537.36"
+              ),
+              "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
+          }
+
+          for url in [
+              "https://acgsecrets.hk/bangumi/list/",
+              "https://acgsecrets.hk/bangumi/202610/",
+          ]:
+              r = requests.get(url, headers=headers, timeout=20)
+              r.encoding = "utf-8"
+              print(f"URL: {url} | Status: {r.status_code} | Length: {len(r.text)}")
+              if "bangumi/202610" in url:
+                  soup = BeautifulSoup(r.text, "html.parser")
+                  blocks = soup.select("div.acgs-anime-block")
+                  print(f"找到作品卡片數: {len(blocks)}")
+                  if not blocks:
+                      print("未抓到卡片，回傳前 300 字元:", r.text[:300])
+
+          ra = requests.post(
+              "https://graphql.anilist.co",
+              json={"query": '{ Page(perPage:1){ media(search:"Frieren",type:ANIME){ id title{native} } } }'},
+              headers={"User-Agent": "acg-test/1.0"},
+              timeout=20,
+          )
+          print(f"AniList Status: {ra.status_code} | Body: {ra.text[:200]}")
+          EOF
